@@ -1,7 +1,12 @@
 import logging
 from typing import Optional, Union
 
+from aiohttp import ClientResponse
+from nio.http import TransportResponse
+
 from markdown import markdown
+from typing import Tuple, Optional, List, Dict, Union
+
 from nio import (
     AsyncClient,
     ErrorResponse,
@@ -13,6 +18,10 @@ from nio import (
     RoomPreset,
     RoomVisibility,
     RoomCreateError,
+    RoomGetStateEventError,
+    RoomGetStateEventResponse,
+    RoomPutStateError,
+    RoomPutStateResponse
 )
 
 logger = logging.getLogger(__name__)
@@ -191,3 +200,42 @@ async def find_or_create_private_msg(client: AsyncClient, mxid: str, roomname: s
         )
     return msg_room
 
+# Code for changing user power was taken from https://github.com/elokapina/bubo/commit/d2a69117e52bb15090f993f79eeed8dbc3b3e4ae
+async def with_ratelimit(client: AsyncClient, method: str, *args, **kwargs):
+    func = getattr(client, method)
+    response = await func(*args, **kwargs)
+    if getattr(response, "status_code", None) == "M_LIMIT_EXCEEDED":
+        return with_ratelimit(client, method, *args, **kwargs)
+    return response
+async def set_user_power(
+    room_id: str, user_id: str, client: AsyncClient, power: int,
+) -> Union[int, RoomGetStateEventError, RoomGetStateEventResponse, RoomPutStateError, RoomPutStateResponse]:
+    """
+    Set user power in a room.
+    """
+    logger.debug(f"Setting user power: {room_id}, user: {user_id}, level: {power}")
+    state_response = await client.room_get_state_event(room_id, "m.room.power_levels")
+    if isinstance(state_response, RoomGetStateEventError):
+        logger.error(f"Failed to fetch room {room_id} state: {state_response.message}")
+        return state_response
+    if isinstance(state_response.transport_response, TransportResponse):
+        status_code = state_response.transport_response.status_code
+    elif isinstance(state_response.transport_response, ClientResponse):
+        status_code = state_response.transport_response.status
+    else:
+        logger.error(f"Failed to determine status code from state response: {state_response}")
+        return state_response
+    if status_code >= 400:
+        logger.warning(
+            f"Failed to set user {user_id} power in {room_id}, response {status_code}"
+        )
+        return status_code
+    state_response.content["users"][user_id] = power
+    response = await with_ratelimit(
+        client,
+        "room_put_state",
+        room_id=room_id,
+        event_type="m.room.power_levels",
+        content=state_response.content,
+    )
+    return response
