@@ -1,28 +1,25 @@
 import logging
-from typing import Optional, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 from aiohttp import ClientResponse
-from nio.http import TransportResponse
-
 from markdown import markdown
-from typing import Tuple, Optional, List, Dict, Union
-
 from nio import (
     AsyncClient,
     ErrorResponse,
     MatrixRoom,
     MegolmEvent,
     Response,
-    RoomSendResponse,
-    SendRetryError,
-    RoomPreset,
-    RoomVisibility,
     RoomCreateError,
     RoomGetStateEventError,
     RoomGetStateEventResponse,
+    RoomPreset,
     RoomPutStateError,
-    RoomPutStateResponse
+    RoomPutStateResponse,
+    RoomSendResponse,
+    RoomVisibility,
+    SendRetryError,
 )
+from nio.http import TransportResponse
 
 logger = logging.getLogger(__name__)
 
@@ -165,6 +162,7 @@ async def decryption_failure(self, room: MatrixRoom, event: MegolmEvent) -> None
         reply_to_event_id=event.event_id,
     )
 
+
 async def send_msg(client: AsyncClient, mxid: str, roomname: str, message: str):
     """
     :param mxid: A Matrix user id to send the message to
@@ -181,6 +179,7 @@ async def send_msg(client: AsyncClient, mxid: str, roomname: str, message: str):
     await send_text_to_room(client, msg_room.room_id, message)
     return True
 
+
 async def find_or_create_private_msg(client: AsyncClient, mxid: str, roomname: str):
     # Find if we already have a common room with user:
     msg_room = None
@@ -193,12 +192,13 @@ async def find_or_create_private_msg(client: AsyncClient, mxid: str, roomname: s
     # Nope, let's create one
     if not msg_room:
         msg_room = await client.room_create(visibility=RoomVisibility.private,
-            name=roomname,
-            is_direct=True,
-            preset=RoomPreset.private_chat,
-            invite={mxid},
-        )
+                                            name=roomname,
+                                            is_direct=True,
+                                            preset=RoomPreset.private_chat,
+                                            invite={mxid},
+                                            )
     return msg_room
+
 
 # Code for changing user power was taken from https://github.com/elokapina/bubo/commit/d2a69117e52bb15090f993f79eeed8dbc3b3e4ae
 async def with_ratelimit(client: AsyncClient, method: str, *args, **kwargs):
@@ -207,6 +207,8 @@ async def with_ratelimit(client: AsyncClient, method: str, *args, **kwargs):
     if getattr(response, "status_code", None) == "M_LIMIT_EXCEEDED":
         return with_ratelimit(client, method, *args, **kwargs)
     return response
+
+
 async def set_user_power(
     room_id: str, user_id: str, client: AsyncClient, power: int,
 ) -> Union[int, RoomGetStateEventError, RoomGetStateEventResponse, RoomPutStateError, RoomPutStateResponse]:

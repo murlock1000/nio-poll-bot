@@ -164,7 +164,7 @@ class Storage:
                 room_id,
             ),
         )
-#WHERE room_id = ? AND user_id = ?
+
     def delete_fail(self, user_id: str, room_id: str):
         """Delete a fail entry via its user and room ids"""
         self._execute(
@@ -173,12 +173,13 @@ class Storage:
         """,
             (room_id, user_id),
         )
+
     def get_fail(self, user_id, room_id):
         """ Get the number of fails for a user in a group"""
 
         self._execute(
             """
-            SELECT attempts from fails 
+            SELECT attempts from fails
             WHERE room_id = ? AND user_id = ?
         """,
             (

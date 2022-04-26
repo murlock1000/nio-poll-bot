@@ -14,7 +14,6 @@ from nio import (
 from my_project_name.bot_commands import Command
 from my_project_name.chat_functions import make_pill, react_to_event, send_text_to_room
 from my_project_name.config import Config
-from my_project_name.message_responses import Message
 from my_project_name.storage import Storage
 
 logger = logging.getLogger(__name__)
@@ -35,6 +34,22 @@ class Callbacks:
         self.config = config
         self.command_prefix = config.command_prefix
 
+    def check_if_message_from_thread(event: RoomMessageText):
+        """ Extracts the rel_type from a RoomMessageText object content
+
+        Args:
+            event: The event defining the message.
+        """
+        event_content = event.source["content"]
+        # relates_to contains data about the replied to message
+        relates_to = event_content.get("m.relates_to")
+
+        is_thread_reply = False
+        if relates_to is not None:
+            is_thread_reply = relates_to.get('rel_type', False) == 'm.thread'
+
+        return is_thread_reply
+
     async def message(self, room: MatrixRoom, event: RoomMessageText) -> None:
         """Callback for when a message event is received
 
@@ -47,8 +62,7 @@ class Callbacks:
         msg = event.body
 
         # Extract flag if the message is in a thread
-        is_thread_reply = event.source["content"].get("m.relates_to",{}).get('rel_type',False) == 'm.thread'
-        logger.debug(f"Message from Thread? | {is_thread_reply}")
+        is_thread_reply = self.check_if_message_from_thread(event)
 
         # Ignore messages from ourselves
         if event.sender == self.client.user:
@@ -70,6 +84,7 @@ class Callbacks:
             # Call the filter method on a message in a channel that not a thread discussion and does not contain the prefix (! REMOVE PREFIXES ENTIRELLY !)
             command = Command(self.client, self.store, self.config, msg, room, event)
             await command.filter_channel()
+            return
 
         # Otherwise if this is in a 1-1 with the bot or features a command prefix,
         # treat it as a command
