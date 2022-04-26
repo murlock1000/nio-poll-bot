@@ -9,6 +9,7 @@ from nio import (
     RoomGetEventError,
     RoomMessageText,
     UnknownEvent,
+    RoomMemberEvent,
 )
 
 from my_project_name.bot_commands import Command
@@ -74,13 +75,13 @@ class Callbacks:
         )
 
         # Process as message if in a public room without command prefix
-        has_command_prefix = msg.startswith(self.command_prefix)
+        # has_command_prefix = msg.startswith(self.command_prefix)
 
         # room.is_group is often a DM, but not always.
         # room.is_group does not allow room aliases
         # room.member_count > 2 ... we assume a public room
         # room.member_count <= 2 ... we assume a DM
-        if not has_command_prefix and room.member_count > 2 and not is_thread_reply:
+        if room.member_count > 2 and not is_thread_reply:
             # Call the filter method on a message in a channel that not a thread discussion and does not contain the prefix (! REMOVE PREFIXES ENTIRELLY !)
             command = Command(self.client, self.store, self.config, msg, room, event)
             await command.filter_channel()
@@ -88,12 +89,12 @@ class Callbacks:
 
         # Otherwise if this is in a 1-1 with the bot or features a command prefix,
         # treat it as a command
-        if has_command_prefix:
+        #if has_command_prefix:
             # Remove the command prefix
-            msg = msg[len(self.command_prefix) :]
+            #msg = msg[len(self.command_prefix) :]
 
-        command = Command(self.client, self.store, self.config, msg, room, event)
-        await command.process()
+        #command = Command(self.client, self.store, self.config, msg, room, event)
+        #await command.process()
 
     async def invite(self, room: MatrixRoom, event: InviteMemberEvent) -> None:
         """Callback for when an invite is received. Join the room specified in the invite.
@@ -204,6 +205,25 @@ class Callbacks:
             event.event_id,
             red_x_and_lock_emoji,
         )
+
+    async def joined(self, room: MatrixRoom, event: RoomMemberEvent) -> None:#InviteEvent
+        """Callback for when a user invites/leaves/joins a room
+
+        Args:
+            room: The room the event came from.
+
+            event: The event defining the message.
+        """
+        # Check if the call happened in a 1-1 room
+        event_content = event.source["content"]
+        user_joined = event_content['membership'] == 'join'
+
+        # Check If a user joined a DM with the bot.
+        if room.member_count == 2 and user_joined:
+            #command = Command(self.client, self.store, self.config, "", room, event)
+            #await command.resend_notification()
+            return
+
 
     async def unknown(self, room: MatrixRoom, event: UnknownEvent) -> None:
         """Callback for when an event with a type that is unknown to matrix-nio is received.

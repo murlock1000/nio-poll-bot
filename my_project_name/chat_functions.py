@@ -1,5 +1,7 @@
 import logging
+import asyncio
 from typing import Dict, List, Optional, Tuple, Union
+
 from aiohttp import ClientResponse
 from markdown import markdown
 from nio import (
@@ -163,6 +165,14 @@ async def decryption_failure(self, room: MatrixRoom, event: MegolmEvent) -> None
         reply_to_event_id=event.event_id,
     )
 
+async def _send_msg_task(client: AsyncClient, room_id: str, message: str):
+    """
+    : Wait for new sync, until we receive the new room information
+    : Send the message to tge riin
+    """
+    while(client.rooms.get(room_id) is None):
+        await client.synced.wait()
+    await send_text_to_room(client, room_id, message)
 
 async def send_msg(client: AsyncClient, mxid: str, roomname: str, message: str):
     """
@@ -174,13 +184,16 @@ async def send_msg(client: AsyncClient, mxid: str, roomname: str, message: str):
     """
     # Sends private message to user. Returns true on success.
     msg_room = await find_or_create_private_msg(client, mxid, roomname)
-    if not msg_room:
-        return False
-    if type(msg_room) is RoomCreateError:
+    if not msg_room or (type(msg_room) is RoomCreateError):
         logger.error(f'Unable to create room when trying to message {mxid}')
         return False
-    # Send message to the room
-    await send_text_to_room(client, msg_room.room_id, message)
+
+    """
+    : A concurrency problem: creating a new room does not sync the local data about rooms.
+    : In order to perform the sync, we must exit the callback.
+    : Solution: use an asyncio task, that performs the sync.wait() and sends the message afterwards concurently with sync_forever().
+    """ 
+    asyncio.get_event_loop().create_task(_send_msg_task(client, msg_room.room_id, message))
     return True
 
 
@@ -215,7 +228,6 @@ async def find_or_create_private_msg(
                                             invite={mxid},
                                             )
         logger.debug(f"Created new room with id: {msg_room.room_id}")
-        return None
     return msg_room
 
 
