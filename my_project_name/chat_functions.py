@@ -1,15 +1,16 @@
 import logging
 from typing import Dict, List, Optional, Tuple, Union
-
 from aiohttp import ClientResponse
 from markdown import markdown
 from nio import (
     AsyncClient,
     ErrorResponse,
+    LocalProtocolError,
     MatrixRoom,
     MegolmEvent,
     Response,
     RoomCreateError,
+    RoomCreateResponse,
     RoomGetStateEventError,
     RoomGetStateEventResponse,
     RoomPreset,
@@ -75,7 +76,7 @@ async def send_text_to_room(
             content,
             ignore_unverified_devices=True,
         )
-    except SendRetryError:
+    except (SendRetryError, LocalProtocolError):
         logger.exception(f"Unable to send message response to {room_id}")
 
 
@@ -165,6 +166,7 @@ async def decryption_failure(self, room: MatrixRoom, event: MegolmEvent) -> None
 
 async def send_msg(client: AsyncClient, mxid: str, roomname: str, message: str):
     """
+    :Code from - https://github.com/vranki/hemppa/blob/dcd69da85f10a60a8eb51670009e7d6829639a2a/bot.py
     :param mxid: A Matrix user id to send the message to
     :param roomname: A Matrix room id to send the message to
     :param message: Text to be sent as message
@@ -172,7 +174,9 @@ async def send_msg(client: AsyncClient, mxid: str, roomname: str, message: str):
     """
     # Sends private message to user. Returns true on success.
     msg_room = await find_or_create_private_msg(client, mxid, roomname)
-    if not msg_room or (type(msg_room) is RoomCreateError):
+    if not msg_room:
+        return False
+    if type(msg_room) is RoomCreateError:
         logger.error(f'Unable to create room when trying to message {mxid}')
         return False
     # Send message to the room
@@ -180,13 +184,26 @@ async def send_msg(client: AsyncClient, mxid: str, roomname: str, message: str):
     return True
 
 
-async def find_or_create_private_msg(client: AsyncClient, mxid: str, roomname: str):
+async def find_or_create_private_msg(
+    client: AsyncClient,
+    mxid: str,
+    roomname: str
+    ) -> Union[RoomCreateResponse, RoomCreateError]:
+    """
+    :param client: The bot AsyncClient
+    :param mxid: user id to create a DM for
+    :param roomname: The DM room name
+    :return: the Room Response from room_create()
+    """
     # Find if we already have a common room with user:
     msg_room = None
     for croomid in client.rooms:
         roomobj = client.rooms[croomid]
-        if len(roomobj.users) == 2:
+        if roomobj.member_count == 2:
             for user in roomobj.users:
+                if user == mxid:
+                    msg_room = roomobj
+            for user in roomobj.invited_users:
                 if user == mxid:
                     msg_room = roomobj
     # Nope, let's create one
@@ -197,6 +214,8 @@ async def find_or_create_private_msg(client: AsyncClient, mxid: str, roomname: s
                                             preset=RoomPreset.private_chat,
                                             invite={mxid},
                                             )
+        logger.debug(f"Created new room with id: {msg_room.room_id}")
+        return None
     return msg_room
 
 

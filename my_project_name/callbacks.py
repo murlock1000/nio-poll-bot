@@ -34,7 +34,7 @@ class Callbacks:
         self.config = config
         self.command_prefix = config.command_prefix
 
-    def check_if_message_from_thread(event: RoomMessageText):
+    def check_if_message_from_thread(self, event: RoomMessageText):
         """ Extracts the rel_type from a RoomMessageText object content
 
         Args:
