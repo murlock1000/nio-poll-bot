@@ -5,6 +5,7 @@
 env/
 env3/
 .env/
+.wenv/
 
 # Bot local files
 *.db
@@ -25,3 +26,6 @@ config.yaml
 
 # Log files
 *.log
+
+# Visual studio code workspace
+*workspace
