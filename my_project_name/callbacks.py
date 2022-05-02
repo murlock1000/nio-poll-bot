@@ -1,5 +1,5 @@
 import logging
-
+from datetime import datetime
 from nio import (
     AsyncClient,
     InviteMemberEvent,
@@ -35,7 +35,7 @@ class Callbacks:
         self.config = config
         self.command_prefix = config.command_prefix
 
-    def check_if_message_from_thread(self, event: RoomMessageText):
+    def _check_if_message_from_thread(self, event: RoomMessageText):
         """ Extracts the rel_type from a RoomMessageText object content
 
         Args:
@@ -63,11 +63,16 @@ class Callbacks:
         msg = event.body
 
         # Extract flag if the message is in a thread
-        is_thread_reply = self.check_if_message_from_thread(event)
+        is_thread_reply = self._check_if_message_from_thread(event)
 
         # Ignore messages from ourselves
         if event.sender == self.client.user:
             return
+        
+        # If we are not filtering old messages, ignore messages older than 5 minutes
+        if not self.config.filter_old_messages:
+            if (datetime.now() - datetime.fromtimestamp(event.server_timestamp/1000.0)).total_seconds() > 300:
+                return
 
         logger.debug(
             f"Bot message received for room {room.display_name} | "

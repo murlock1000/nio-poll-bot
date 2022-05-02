@@ -5,6 +5,9 @@
 # The string to prefix messages with to talk to the bot in group chats
 command_prefix: "!c"
 
+# Option for filtering all messages in a room on startup
+filter_old_messages: False
+
 # Options for connecting to the bot's Matrix account
 matrix:
   # The Matrix User ID of the bot account

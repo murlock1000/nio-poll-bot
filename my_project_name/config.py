@@ -105,6 +105,8 @@ class Config:
 
         self.command_prefix = self._get_cfg(["command_prefix"], default="!c") + " "
 
+        self.filter_old_messages = self._get_cfg(["filter_old_messages"], default=False)
+
     def _get_cfg(
         self,
         path: List[str],
