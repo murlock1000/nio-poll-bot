@@ -114,8 +114,12 @@ class Command:
                 # Redact the message
                 tries = 0
                 redact_response = None
-                while(type(redact_response) is not RoomRedactResponse and tries < 3):
-                    redact_response = await self.client.room_redact(self.room.room_id, self.event.event_id, "You are not a moderator of this channel.")
+                while type(redact_response) is not RoomRedactResponse and tries < 3:
+                    redact_response = await self.client.room_redact(
+                        self.room.room_id,
+                        self.event.event_id,
+                        "You are not a moderator of this channel.",
+                    )
                     tries += 1
                 if type(redact_response) is not RoomRedactResponse:
                     logger.error(f"Unable to redact message: {redact_response}")
@@ -125,16 +129,34 @@ class Command:
 
                 # Ban or increment attempts
                 if fails < 3:
-                    self.store.update_or_create_fail(self.event.sender, self.room.room_id)
-                    await send_msg(self.client, self.event.sender, "WARNING!", f"Your comment has been deleted {fails+1} times in {self.room.room_id} discussion due to being improperly sent. Please reply in threads.")
+                    self.store.update_or_create_fail(
+                        self.event.sender, self.room.room_id
+                    )
+                    await send_msg(
+                        self.client,
+                        self.event.sender,
+                        "WARNING!",
+                        f"Your comment has been deleted {fails+1} times in {self.room.room_id} discussion due to being improperly sent. Please reply in threads.",
+                    )
                 else:
-                    logger.info(f"{self.room.user_name(self.event.sender)} has been banned from room {self.room.room_id}")
+                    logger.info(
+                        f"{self.room.user_name(self.event.sender)} has been banned from room {self.room.room_id}"
+                    )
                     # Delete the user attempt entry
                     self.store.delete_fail(self.event.sender, self.room.room_id)
 
                     # Mute user
-                    await set_user_power(self.room.room_id, self.event.sender, self.client, -1)
+                    await set_user_power(
+                        self.room.room_id, self.event.sender, self.client, -1
+                    )
                     # Inform user about the ban
-                    await send_msg(self.client, self.event.sender, "WARNING!", f"You have made >3 improper comments in {self.room.room_id} discussion. Please seek help from the group admin")
+                    await send_msg(
+                        self.client,
+                        self.event.sender,
+                        "WARNING!",
+                        f"You have made >3 improper comments in {self.room.room_id} discussion. Please seek help from the group admin",
+                    )
             else:
-                logger.error(f"Bot does not have sufficient power to redact others in group: {self.room.room_id}")
+                logger.error(
+                    f"Bot does not have sufficient power to redact others in group: {self.room.room_id}"
+                )

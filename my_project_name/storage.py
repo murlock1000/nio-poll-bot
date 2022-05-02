@@ -146,7 +146,9 @@ class Storage:
 
     def update_or_create_fail(self, user_id, room_id):
         """Create a new fail entry, or increment an existing one"""
-        logger.debug(f"Creating new/incrementing attempts for {user_id} in room {room_id}")
+        logger.debug(
+            f"Creating new/incrementing attempts for {user_id} in room {room_id}"
+        )
         self._execute(
             """
             INSERT INTO fails (
@@ -175,7 +177,7 @@ class Storage:
         )
 
     def get_fail(self, user_id, room_id):
-        """ Get the number of fails for a user in a group"""
+        """Get the number of fails for a user in a group"""
 
         self._execute(
             """
@@ -190,7 +192,9 @@ class Storage:
 
         row = self.cursor.fetchall()
         if len(row) != 0:
-            logger.debug(f"Found failed attempts for {user_id} in room {room_id}: {row[0][0]}")
+            logger.debug(
+                f"Found failed attempts for {user_id} in room {room_id}: {row[0][0]}"
+            )
             return row[0][0]
         logger.debug(f"First failed attempt for {user_id} in room {room_id}")
         return 0

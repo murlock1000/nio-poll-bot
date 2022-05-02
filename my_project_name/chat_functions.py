@@ -1,6 +1,6 @@
 import logging
 import asyncio
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Optional, Union
 
 from aiohttp import ClientResponse
 from markdown import markdown
@@ -165,14 +165,16 @@ async def decryption_failure(self, room: MatrixRoom, event: MegolmEvent) -> None
         reply_to_event_id=event.event_id,
     )
 
+
 async def _send_msg_task(client: AsyncClient, room_id: str, message: str):
     """
     : Wait for new sync, until we receive the new room information
     : Send the message to tge riin
     """
-    while(client.rooms.get(room_id) is None):
+    while client.rooms.get(room_id) is None:
         await client.synced.wait()
     await send_text_to_room(client, room_id, message)
+
 
 async def send_msg(client: AsyncClient, mxid: str, roomname: str, message: str):
     """
@@ -185,23 +187,23 @@ async def send_msg(client: AsyncClient, mxid: str, roomname: str, message: str):
     # Sends private message to user. Returns true on success.
     msg_room = await find_or_create_private_msg(client, mxid, roomname)
     if not msg_room or (type(msg_room) is RoomCreateError):
-        logger.error(f'Unable to create room when trying to message {mxid}')
+        logger.error(f"Unable to create room when trying to message {mxid}")
         return False
 
     """
     : A concurrency problem: creating a new room does not sync the local data about rooms.
     : In order to perform the sync, we must exit the callback.
     : Solution: use an asyncio task, that performs the sync.wait() and sends the message afterwards concurently with sync_forever().
-    """ 
-    asyncio.get_event_loop().create_task(_send_msg_task(client, msg_room.room_id, message))
+    """
+    asyncio.get_event_loop().create_task(
+        _send_msg_task(client, msg_room.room_id, message)
+    )
     return True
 
 
 async def find_or_create_private_msg(
-    client: AsyncClient,
-    mxid: str,
-    roomname: str
-    ) -> Union[RoomCreateResponse, RoomCreateError]:
+    client: AsyncClient, mxid: str, roomname: str
+) -> Union[RoomCreateResponse, RoomCreateError]:
     """
     :param client: The bot AsyncClient
     :param mxid: user id to create a DM for
@@ -221,12 +223,13 @@ async def find_or_create_private_msg(
                     msg_room = roomobj
     # Nope, let's create one
     if not msg_room:
-        msg_room = await client.room_create(visibility=RoomVisibility.private,
-                                            name=roomname,
-                                            is_direct=True,
-                                            preset=RoomPreset.private_chat,
-                                            invite={mxid},
-                                            )
+        msg_room = await client.room_create(
+            visibility=RoomVisibility.private,
+            name=roomname,
+            is_direct=True,
+            preset=RoomPreset.private_chat,
+            invite={mxid},
+        )
         logger.debug(f"Created new room with id: {msg_room.room_id}")
     return msg_room
 
@@ -241,8 +244,17 @@ async def with_ratelimit(client: AsyncClient, method: str, *args, **kwargs):
 
 
 async def set_user_power(
-    room_id: str, user_id: str, client: AsyncClient, power: int,
-) -> Union[int, RoomGetStateEventError, RoomGetStateEventResponse, RoomPutStateError, RoomPutStateResponse]:
+    room_id: str,
+    user_id: str,
+    client: AsyncClient,
+    power: int,
+) -> Union[
+    int,
+    RoomGetStateEventError,
+    RoomGetStateEventResponse,
+    RoomPutStateError,
+    RoomPutStateResponse,
+]:
     """
     Set user power in a room.
     """
@@ -256,7 +268,9 @@ async def set_user_power(
     elif isinstance(state_response.transport_response, ClientResponse):
         status_code = state_response.transport_response.status
     else:
-        logger.error(f"Failed to determine status code from state response: {state_response}")
+        logger.error(
+            f"Failed to determine status code from state response: {state_response}"
+        )
         return state_response
     if status_code >= 400:
         logger.warning(
