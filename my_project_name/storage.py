@@ -94,6 +94,7 @@ class Storage:
   `room_id` VARCHAR(80) NOT NULL,
   `event_id` VARCHAR(80) NOT NULL,
   `topic` TEXT NOT NULL,
+  `kind` VARCHAR(80) NOT NULL,
   `reply_event_id` VARCHAR(80),
   PRIMARY KEY (`room_id`, `event_id`))
             """
@@ -168,7 +169,7 @@ class Storage:
         else:
             self.cursor.execute(*args)
 
-    def create_poll(self, room_id, event_id, topic):
+    def create_poll(self, room_id, event_id, topic, kind):
         """Create a poll in the database."""
         logger.debug(
             f"Creating new poll `{topic}` in room {room_id}, event {event_id}"
@@ -178,10 +179,11 @@ class Storage:
             INSERT INTO polls (
                 room_id,
                 event_id,
-                topic
-            ) VALUES (?, ?, ?)
+                topic,
+                kind
+            ) VALUES (?, ?, ?, ?)
         """,
-            (room_id, event_id, topic),
+            (room_id, event_id, topic, kind),
         )
     
     def get_poll(self, room_id, event_id):
@@ -221,14 +223,14 @@ class Storage:
             (reply_event_id, room_id, event_id),
         )
     
-    def get_reply_event_id_in_poll(self, room_id, event_id):
-        """Get the reply event id from the database."""
+    def get_reply_event(self, room_id, event_id):
+        """Get the reply event from the database."""
         logger.debug(
-            f"Getting reply event id in room {room_id}, event {event_id}"
+            f"Getting reply event in room {room_id}, event {event_id}"
         )
         self._execute(
             """
-            SELECT reply_event_id FROM polls WHERE room_id = ? AND event_id = ?
+            SELECT * FROM polls WHERE room_id = ? AND event_id = ?
         """,
             (room_id, event_id),
         )

@@ -15,6 +15,7 @@
 # Read the SETUP.md. 
 # Setup for native mode (Could be setup in docker, did not try)
 # Installing libolm: apt install libolm-dev
+# Install python dev tools: apt-get install python3-dev
 # Use default SQLite storage backend (postgres optional, may be used in future).
 
 # Create a bot user:
@@ -50,7 +51,13 @@ curl --header "Authorization: Bearer ENTERADMINAPIKEYHERE" -H "Content-Type: app
 # Install libolm:
 sudo apt install libolm-dev
 
-# Install postgres development headers:
+# Install python dev tools
+sudo apt-get install python3-dev
+
+# Install build essentials
+sudo apt-get install build-essential
+
+# Install postgres development headers (optional):
 sudo apt install libpq-dev libpq5
 
 # Create a python3 virtual environment in the project location (creates folder 'env'):

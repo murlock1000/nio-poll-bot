@@ -35,7 +35,27 @@ class Callbacks:
         self.config = config
         self.command_prefix = config.command_prefix
 
-    def _get_formatted_poll_results(self, room_id, reference_id, is_final=False) -> str:
+    def get_formatted_poll_results(self, room_id, reference_id, is_final=False, kind="org.matrix.msc3381.poll.disclosed") -> str:
+        if kind == "org.matrix.msc3381.poll.disclosed":
+            return self._get_formatted_open_poll_results(room_id, reference_id, is_final)
+        else:
+            return self._get_formatted_closed_poll_results(room_id, reference_id, is_final)
+
+    def _get_formatted_closed_poll_results(self, room_id, reference_id, is_final=False) -> str:
+        poll = self.store.get_poll(room_id, reference_id)
+        responses = self.store.get_responses(room_id, reference_id)
+    
+        user_responses = {response[1]:response[0] for response in responses}
+        data = ""
+        for user in user_responses.keys():
+            data += f"{make_pill(user)}\n"
+        data += "\n"
+        if is_final:
+            return f"Final voters for poll `{poll[2]}`:\n\n{data}"
+        else:
+            return f"Voters for poll `{poll[2]}`:\n\n{data}"
+
+    def _get_formatted_open_poll_results(self, room_id, reference_id, is_final=False) -> str:
         poll = self.store.get_poll(room_id, reference_id)
         responses = self.store.get_responses(room_id, reference_id)
         answers = self.store.get_answers(room_id, reference_id)
@@ -154,10 +174,11 @@ class Callbacks:
         """
 
         if event.type == "org.matrix.msc3381.poll.start":
+          #  logger.debug(f"Event content: {event.source}")
             content = event.source.get("content", {}).get("org.matrix.msc3381.poll.start", {})
             topic = content.get("question",{}).get("body")
-
-            self.store.create_poll(event.room_id, event.event_id, topic)
+            kind = content.get("kind","")
+            self.store.create_poll(event.room_id, event.event_id, topic, kind)
 
             answers = content.get("answers", {})
 
@@ -166,13 +187,13 @@ class Callbacks:
                 answer = answer.get("org.matrix.msc1767.text","")
                 self.store.add_answer(answer, answer_hash, event.room_id, event.event_id)
 
-            message = self._get_formatted_poll_results(event.room_id, event.event_id)
+            message = self.get_formatted_poll_results(event.room_id, event.event_id, kind=kind)
 
             res = await send_text_to_room(
                 self.client,
                 room.room_id,
                 message,
-                reply_to_event_id=event.event_id,
+        #        reply_to_event_id=event.event_id,
             )
 
             self.store.update_reply_event_id_in_poll(event.room_id, event.event_id, res.event_id)
@@ -183,30 +204,36 @@ class Callbacks:
             response = content.get("org.matrix.msc3381.poll.response", {}).get("answers", [])[0]
             reference_id = content.get("m.relates_to", {}).get("event_id","")
             self.store.create_or_update_response(response, sender, event.room_id, reference_id)
-            reply_event_id = self.store.get_reply_event_id_in_poll(event.room_id, reference_id)[0]
-
-            message = self._get_formatted_poll_results(event.room_id, reference_id)
-            await send_text_to_room(
-                self.client,
-                room.room_id,
-                message,
-                edit_event_id=reply_event_id,
-            )
+            reply_event = self.store.get_reply_event(event.room_id, reference_id)
+            # Get poll event id to reply to if it exists
+            if reply_event:
+                reply_event_id = reply_event[4]
+                kind = reply_event[3]
+                message = self.get_formatted_poll_results(event.room_id, reference_id, kind=kind)
+                await send_text_to_room(
+                    self.client,
+                    room.room_id,
+                    message,
+                    edit_event_id=reply_event_id,
+                )
 
         elif event.type == "org.matrix.msc3381.poll.end":
             content = event.source.get("content", {})
             reference_id = content.get("m.relates_to", {}).get("event_id","")
             
-            reply_event_id = self.store.get_reply_event_id_in_poll(event.room_id, reference_id)[0]
+            reply_event = self.store.get_reply_event(event.room_id, reference_id)
 
-            message = self._get_formatted_poll_results(event.room_id, reference_id, is_final=True)
-            await send_text_to_room(
-                self.client,
-                room.room_id,
-                message,
-                edit_event_id=reply_event_id,
-            )
-            self.store.delete_poll(event.room_id, reference_id)
+            if reply_event:
+                reply_event_id = reply_event[4]
+                kind = reply_event[3]
+                message = self.get_formatted_poll_results(event.room_id, reference_id, is_final=True, kind=kind)
+                await send_text_to_room(
+                    self.client,
+                    room.room_id,
+                    message,
+                    edit_event_id=reply_event_id,
+                )
+                self.store.delete_poll(event.room_id, reference_id)
             
         else:
 
