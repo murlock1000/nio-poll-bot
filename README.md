@@ -1,160 +1,98 @@
-# Nio Template [![Built with matrix-nio](https://img.shields.io/badge/built%20with-matrix--nio-brightgreen)](https://github.com/poljar/matrix-nio) <a href="https://matrix.to/#/#nio-template:matrix.org"><img src="https://img.shields.io/matrix/nio-template:matrix.org?color=blue&label=Join%20the%20Matrix%20Room&server_fqdn=matrix-client.matrix.org" /></a>
+# Matrix Bot for Keepin track of element polls.
+# Used Python 3.8.10
+# Created using the matrix-nio python api for matrix communications
+# Base template used: nio-template
 
-A template for creating bots with
-[matrix-nio](https://github.com/poljar/matrix-nio). The documentation for
-matrix-nio can be found
-[here](https://matrix-nio.readthedocs.io/en/latest/nio.html).
+#### FUNCTIONS ####
+# This bot is designed to track user votes on a poll and display them live
 
-This repo contains a working Matrix echo bot that can be easily extended to your needs. Detailed documentation is included as well as a step-by-step guide on basic bot building.
+######### Sources ##########
+# bot template:       https://github.com/anoadragon453/nio-template
+# matrix-nio library: https://github.com/poljar/matrix-nio
 
-Features include out-of-the-box support for:
+############ CLEAN SETUP  ####################
 
-* Bot commands
-* SQLite3 and Postgres database backends
-* Configuration files
-* Multi-level logging
-* Docker
-* Participation in end-to-end encrypted rooms
+# Read the SETUP.md. 
+# Setup for native mode (Could be setup in docker, did not try)
+# Installing libolm: apt install libolm-dev
+# Use default SQLite storage backend (postgres optional, may be used in future).
 
-## Projects using nio-template
+# Create a bot user:
+# We will be using the @test.synapse.local user with pass: pass
 
-* [anoadragon453/matrix-reminder-bot](https://github.com/anoadragon453/matrix-reminder-bot
-) - A matrix bot to remind you about things
-* [gracchus163/hopeless](https://github.com/gracchus163/hopeless) - COREbot for the Hope2020 conference Matrix server
-* [alturiak/nio-smith](https://github.com/alturiak/nio-smith) - A modular bot for @matrix-org that can be dynamically
-extended by plugins
-* [anoadragon453/msc-chatbot](https://github.com/anoadragon453/msc-chatbot) - A matrix bot for matrix spec proposals
-* [anoadragon453/matrix-episode-bot](https://github.com/anoadragon453/matrix-episode-bot) - A matrix bot to post episode links
-* [TheForcer/vision-nio](https://github.com/TheForcer/vision-nio) - A general purpose matrix chatbot
-* [anoadragon453/drawing-challenge-bot](https://github.com/anoadragon453/drawing-challenge-bot) - A matrix bot to
-post historical, weekly art challenges from reddit to a room
-* [8go/matrix-eno-bot](https://github.com/8go/matrix-eno-bot) - A bot to be used as a) personal assistant or b) as 
-an admin tool to maintain your Matrix installation or server
-* [elokapina/bubo](https://github.com/elokapina/bubo) - Matrix bot to help with community management
-* [elokapina/middleman](https://github.com/elokapina/middleman) - Matrix bot to act as a middleman, for example as a support bot
-* [chc4/matrix-pinbot](https://github.com/chc4/matrix-pinbot) - Matrix bot for pinning messages to a dedicated channel
 
-Want your project listed here? [Edit this
-page!](https://github.com/anoadragon453/nio-template/edit/master/README.md)
+######### CHANGING BOT USER MESSAGE THROTTLING SETTINGS ########
+# In order to allow the bot to respond to messages quickly,
+# we must overwrite the user message throttling settings,
+# We will be using the synapse Admin API to make a POST request to the server
 
-## Getting started
+## Source ##
+https://matrix-org.github.io/synapse/latest/usage/administration/admin_api/
 
-See [SETUP.md](SETUP.md) for how to setup and run the template project.
+## Getting the admin api key ###
+1. Create a matrix user with admin privileges
+2. Log in with the user
+3. Go to 'All settings' -> 'Help & About' -> 'Advanced' -> 'Access Token' (at the bottom)
+4. Copy the Access Token.
+# This token is only valid for the duration you are logged in with the user
+ 
+## Making the API call ##
+# The call for overwriting the @test:synapse.local throttle settings is:
+curl --header "Authorization: Bearer ENTERADMINAPIKEYHERE" -H "Content-Type: application/json" --request POST -k http://localhost:8008/_synapse/admin/v1/users/@test:synapse.local/override_ratelimit
+# Should return result of {"messages_per_second":0, "burst_count":0}
+#################################
 
-## Project structure
 
-*A reference of each file included in the template repository, its purpose and
-what it does.*
+########### Step by step instructions ############
 
-The majority of the code is kept inside of the `my_project_name` folder, which
-is in itself a [python package](https://docs.python.org/3/tutorial/modules.html),
-the `__init__.py` file inside declaring it as such.
+### Installing Prerequisites ###
 
-To run the bot, the `my-project-name` script in the root of the codebase is
-available. It will import the `main` function from the `main.py` file in the
-package and run it. To properly install this script into your python environment,
-run `pip install -e .` in the project's root directory.
+# Install libolm:
+sudo apt install libolm-dev
 
-`setup.py` contains package information (for publishing your code to
-[PyPI](https://pypi.org)) and `setup.cfg` just contains some configuration
-options for linting tools.
+# Install postgres development headers:
+sudo apt install libpq-dev libpq5
 
-`sample.config.yaml` is a sample configuration file. People running your bot
-should be advised to copy this file to `config.yaml`, then edit it according to
-their needs. Be sure never to check the edited `config.yaml` into source control
-since it'll likely contain sensitive details such as passwords!
+# Create a python3 virtual environment in the project location (creates folder 'env'):
+virtualenv -p python3 env
+# Activate the venv
+source env/bin/activate
 
-Below is a detailed description of each of the source code files contained within
-the `my_project_name` directory:
+# Install python dependencies:
+pip install -e.
 
-### `main.py`
+# (Optional) install postgres python dependencies:
+pip install -e ".[postgres]"
 
-Initialises the config file, the bot store, and nio's AsyncClient (which is
-used to retrieve and send events to a matrix homeserver). It also registering
-some callbacks on the AsyncClient to tell it to call some functions when
-certain events are received (such as an invite to a room, or a new message in a
-room the bot is in).
 
-It also starts the sync loop. Matrix clients "sync" with a homeserver, by
-asking constantly asking for new events. Each time they do, the client gets a
-sync token (stored in the `next_batch` field of the sync response). If the
-client provides this token the next time it syncs (using the `since` parameter
-on the `AsyncClient.sync` method), the homeserver will only return new event
-*since* those specified by the given token.
+######## Config file ##########
 
-This token is saved and provided again automatically by using the
-`client.sync_forever(...)` method.
+# Copy sample config file to new 'config.yaml' file
+cp sample.config.yaml config.yaml
 
-### `config.py`
+# config.yaml file edits:
+#----------------------------------------------------------
+user_id: "@test:synapse.local"
+user_password: "pass"
 
-This file reads a config file at a given path (hardcoded as `config.yaml` in
-`main.py`), processes everything in it and makes the values available to the
-rest of the bot's code so it knows what to do. Most of the options in the given
-config file have default values, so things will continue to work even if an
-option is left out of the config file. Obviously there are some config values
-that are required though, like the homeserver URL, username, access token etc.
-Otherwise the bot can't function.
+homeserver_url: http://localhost:8080
 
-### `storage.py`
+# Haven't figured out this part yet
+device_id: PUTRANDOMCHARSHERE
+device_name: test_matrix_bot
 
-Creates (if necessary) and connects to a SQLite3 database and provides commands
-to put or retrieve data from it. Table definitions should be specified in
-`_initial_setup`, and any necessary migrations should be put in
-`_run_migrations`. There's currently no defined method for how migrations
-should work though.
+# (Optional) change logging levels to debug
+level: DEBUG
+#----------------------------------------------------------
 
-### `callbacks.py`
+# Run the bot:
+my-project-name
 
-Holds callback methods which get run when the bot get a certain type of event
-from the homserver during sync. The type and name of the method to be called
-are specified in `main.py`. Currently there are two defined methods, one that
-gets called when a message is sent in a room the bot is in, and another that
-runs when the bot receives an invite to the room.
+# Invite the bot to a group channel
+# Give the bot moderator power level (50)
 
-The message callback function, `message`, checks if the message was for the
-bot, and whether it was a command. If both of those are true, the bot will
-process that command.
+# In order to allow the bot to mute people:
+# Change Roles&Permissions: allow 'Change permissions' to Moderator 
 
-The invite callback function, `invite`, processes the invite event and attempts
-to join the room. This way, the bot will auto-join any room it is invited to.
-
-### `bot_commands.py`
-
-Where all the bot's commands are defined. New commands should be defined in
-`process` with an associated private method. `echo` and `help` commands are
-provided by default.
-
-A `Command` object is created when a message comes in that's recognised as a
-command from a user directed at the bot (either through the specified command
-prefix (defined by the bot's config file), or through a private message
-directly to the bot. The `process` command is then called for the bot to act on
-that command.
-
-### `message_responses.py`
-
-Where responses to messages that are posted in a room (but not necessarily
-directed at the bot) are specified. `callbacks.py` will listen for messages in
-rooms the bot is in, and upon receiving one will create a new `Message` object
-(which contains the message text, amongst other things) and calls `process()`
-on it, which can send a message to the room as it sees fit.
-
-A good example of this would be a Github bot that listens for people mentioning
-issue numbers in chat (e.g. "We should fix #123"), and the bot sending messages
-to the room immediately afterwards with the issue name and link.
-
-### `chat_functions.py`
-
-A separate file to hold helper methods related to messaging. Mostly just for
-organisational purposes. Currently just holds `send_text_to_room`, a helper
-method for sending formatted messages to a room.
-
-### `errors.py`
-
-Custom error types for the bot. Currently there's only one special type that's
-defined for when a error is found while the config file is being processed.
-
-## Questions?
-
-Any questions? Please ask them in
-[#nio-template:amorgan.xyz](https://matrix.to/#/!vmWBOsOkoOtVHMzZgN:amorgan.xyz?via=amorgan.xyz)
-and we'll help you out!
+# In order to allow the bot to remove messages:
+# allow 'Remove messages sent by others' to Moderator

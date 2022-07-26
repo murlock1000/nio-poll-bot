@@ -63,12 +63,10 @@ async def main():
 
     # Set up event callbacks
     callbacks = Callbacks(client, store, config)
-    client.add_event_callback(callbacks.message, (RoomMessageText,))
     client.add_event_callback(
         callbacks.invite_event_filtered_callback, (InviteMemberEvent,)
     )
     client.add_event_callback(callbacks.decryption_failure, (MegolmEvent,))
-    client.add_event_callback(callbacks.joined, (RoomMemberEvent,))
     client.add_event_callback(callbacks.unknown, (UnknownEvent,))
 
     # Keep trying to reconnect on failure (with some time in-between)

@@ -35,6 +35,29 @@ class Callbacks:
         self.config = config
         self.command_prefix = config.command_prefix
 
+    def _get_formatted_poll_results(self, room_id, reference_id, is_final=False) -> str:
+        poll = self.store.get_poll(room_id, reference_id)
+        responses = self.store.get_responses(room_id, reference_id)
+        answers = self.store.get_answers(room_id, reference_id)
+        # Send a message acknowledging the reaction
+        answer_table = {answer[1]:answer[0] for answer in answers}
+        user_responses = {response[1]:response[0] for response in responses}
+        
+        voters = {answer[1]:[] for answer in answers}
+        data = ""
+        
+        for user, response_hash in user_responses.items():
+            voters[response_hash].append(f"{user}")
+        for answer_hash, answer in reversed(answer_table.items()):
+            data += f"{answer}:\n"
+            for user in voters[answer_hash]:
+                data += f"{make_pill(user)}\n"
+            data += "\n"
+        
+        if is_final:
+            return f"Final poll results for `{poll[2]}`:\n\n{data}"
+        else:
+            return f"Poll results for `{poll[2]}`:\n\n{data}"
     def _check_if_message_from_thread(self, event: RoomMessageText):
         """Extracts the rel_type from a RoomMessageText object content
 
@@ -50,49 +73,6 @@ class Callbacks:
             is_thread_reply = relates_to.get("rel_type", False) == "m.thread"
 
         return is_thread_reply
-
-    async def message(self, room: MatrixRoom, event: RoomMessageText) -> None:
-        """Callback for when a message event is received
-
-        Args:
-            room: The room the event came from.
-
-            event: The event defining the message.
-        """
-        # Extract the message text
-        msg = event.body
-
-        # Extract flag if the message is in a thread
-        is_thread_reply = self._check_if_message_from_thread(event)
-
-        # Ignore messages from ourselves
-        if event.sender == self.client.user:
-            return
-
-        # If we are not filtering old messages, ignore messages older than 5 minutes
-        if not self.config.filter_old_messages:
-            if (
-                datetime.now() - datetime.fromtimestamp(event.server_timestamp / 1000.0)
-            ).total_seconds() > 300:
-                return
-
-        logger.debug(
-            f"Bot message received for room {room.display_name} | "
-            f"{room.user_name(event.sender)}: {msg}"
-        )
-
-        # Process as message if in a public room without command prefix
-        # has_command_prefix = msg.startswith(self.command_prefix)
-
-        # room.is_group is often a DM, but not always.
-        # room.is_group does not allow room aliases
-        # room.member_count > 2 ... we assume a public room
-        # room.member_count <= 2 ... we assume a DM
-        if room.member_count > 2 and not is_thread_reply:
-            # Call the filter method on a message in a channel that not a thread discussion and does not contain the prefix (! REMOVE PREFIXES ENTIRELLY !)
-            command = Command(self.client, self.store, self.config, msg, room, event)
-            await command.filter_channel()
-            return
 
     async def invite(self, room: MatrixRoom, event: InviteMemberEvent) -> None:
         """Callback for when an invite is received. Join the room specified in the invite.
@@ -134,48 +114,6 @@ class Callbacks:
             # This is our own membership (invite) event
             await self.invite(room, event)
 
-    async def _reaction(
-        self, room: MatrixRoom, event: UnknownEvent, reacted_to_id: str
-    ) -> None:
-        """A reaction was sent to one of our messages. Let's send a reply acknowledging it.
-
-        Args:
-            room: The room the reaction was sent in.
-
-            event: The reaction event.
-
-            reacted_to_id: The event ID that the reaction points to.
-        """
-        logger.debug(f"Got reaction to {room.room_id} from {event.sender}.")
-
-        # Get the original event that was reacted to
-        event_response = await self.client.room_get_event(room.room_id, reacted_to_id)
-        if isinstance(event_response, RoomGetEventError):
-            logger.warning(
-                "Error getting event that was reacted to (%s)", reacted_to_id
-            )
-            return
-        reacted_to_event = event_response.event
-
-        # Only acknowledge reactions to events that we sent
-        if reacted_to_event.sender != self.config.user_id:
-            return
-
-        # Send a message acknowledging the reaction
-        reaction_sender_pill = make_pill(event.sender)
-        reaction_content = (
-            event.source.get("content", {}).get("m.relates_to", {}).get("key")
-        )
-        message = (
-            f"{reaction_sender_pill} reacted to this event with `{reaction_content}`!"
-        )
-        await send_text_to_room(
-            self.client,
-            room.room_id,
-            message,
-            reply_to_event_id=reacted_to_id,
-        )
-
     async def decryption_failure(self, room: MatrixRoom, event: MegolmEvent) -> None:
         """Callback for when an event fails to decrypt. Inform the user.
 
@@ -204,24 +142,6 @@ class Callbacks:
             red_x_and_lock_emoji,
         )
 
-    async def joined(self, room: MatrixRoom, event: RoomMemberEvent) -> None:
-        """Callback for when a user invites/leaves/joins a room
-
-        Args:
-            room: The room the event came from.
-
-            event: The event defining the message.
-        """
-        # Check if the call happened in a 1-1 room
-        event_content = event.source["content"]
-        user_joined = event_content["membership"] == "join"
-
-        # Check If a user joined a DM with the bot.
-        if room.member_count == 2 and user_joined:
-            # command = Command(self.client, self.store, self.config, "", room, event)
-            # await command.resend_notification()
-            return
-
     async def unknown(self, room: MatrixRoom, event: UnknownEvent) -> None:
         """Callback for when an event with a type that is unknown to matrix-nio is received.
         Currently this is used for reaction events, which are not yet part of a released
@@ -232,15 +152,66 @@ class Callbacks:
 
             event: The event itself.
         """
-        if event.type == "m.reaction":
-            # Get the ID of the event this was a reaction to
-            relation_dict = event.source.get("content", {}).get("m.relates_to", {})
 
-            reacted_to = relation_dict.get("event_id")
-            if reacted_to and relation_dict.get("rel_type") == "m.annotation":
-                await self._reaction(room, event, reacted_to)
-                return
+        if event.type == "org.matrix.msc3381.poll.start":
+            content = event.source.get("content", {}).get("org.matrix.msc3381.poll.start", {})
+            topic = content.get("question",{}).get("body")
 
-        logger.debug(
-            f"Got unknown event with type to {event.type} from {event.sender} in {room.room_id}."
-        )
+            self.store.create_poll(event.room_id, event.event_id, topic)
+
+            answers = content.get("answers", {})
+
+            for answer in answers:
+                answer_hash = answer.get("id","")
+                answer = answer.get("org.matrix.msc1767.text","")
+                self.store.add_answer(answer, answer_hash, event.room_id, event.event_id)
+
+            message = self._get_formatted_poll_results(event.room_id, event.event_id)
+
+            res = await send_text_to_room(
+                self.client,
+                room.room_id,
+                message,
+                reply_to_event_id=event.event_id,
+            )
+
+            self.store.update_reply_event_id_in_poll(event.room_id, event.event_id, res.event_id)
+
+        elif event.type == "org.matrix.msc3381.poll.response":
+            sender = event.source.get("sender", "")
+            content = event.source.get("content", {})
+            response = content.get("org.matrix.msc3381.poll.response", {}).get("answers", [])[0]
+            reference_id = content.get("m.relates_to", {}).get("event_id","")
+            self.store.create_or_update_response(response, sender, event.room_id, reference_id)
+            reply_event_id = self.store.get_reply_event_id_in_poll(event.room_id, reference_id)[0]
+
+            message = self._get_formatted_poll_results(event.room_id, reference_id)
+            await send_text_to_room(
+                self.client,
+                room.room_id,
+                message,
+                edit_event_id=reply_event_id,
+            )
+
+        elif event.type == "org.matrix.msc3381.poll.end":
+            content = event.source.get("content", {})
+            reference_id = content.get("m.relates_to", {}).get("event_id","")
+            
+            reply_event_id = self.store.get_reply_event_id_in_poll(event.room_id, reference_id)[0]
+
+            message = self._get_formatted_poll_results(event.room_id, reference_id, is_final=True)
+            await send_text_to_room(
+                self.client,
+                room.room_id,
+                message,
+                edit_event_id=reply_event_id,
+            )
+            self.store.delete_poll(event.room_id, reference_id)
+            
+        else:
+
+            logger.debug(
+                f"Got unknown event with type to {event.type} from {event.sender} in {room.room_id}."
+            )
+            #logger.debug(f"Event content: {event.source}")
+

@@ -34,6 +34,7 @@ async def send_text_to_room(
     notice: bool = True,
     markdown_convert: bool = True,
     reply_to_event_id: Optional[str] = None,
+    edit_event_id: Optional[str] = None,
 ) -> Union[RoomSendResponse, ErrorResponse]:
     """Send text to a matrix room.
 
@@ -53,6 +54,8 @@ async def send_text_to_room(
         reply_to_event_id: Whether this message is a reply to another event. The event
             ID this is message is a reply to.
 
+        edit_event_id: Whether this message is an edit to another event. The event ID
+
     Returns:
         A RoomSendResponse if the request was successful, else an ErrorResponse.
     """
@@ -70,6 +73,15 @@ async def send_text_to_room(
 
     if reply_to_event_id:
         content["m.relates_to"] = {"m.in_reply_to": {"event_id": reply_to_event_id}}
+
+    if edit_event_id:
+            content = {
+                **content,
+                "body": f" * {content['body']}",
+                "formatted_body": f" * {content['formatted_body']}",
+                "m.relates_to": {"event_id": edit_event_id, "rel_type": "m.replace"},
+                "m.new_content": {**content},
+            }
 
     try:
         return await client.room_send(

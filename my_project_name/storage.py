@@ -87,24 +87,48 @@ class Storage:
         """,
             (0,),
         )
-
-        # Set up the improperly sent message table
+        # Create table for polls
         self._execute(
             """
-            CREATE TABLE fails (
-                user_id TEXT NOT NULL,
-                room_id TEXT NOT NULL,
-                attempts INTEGER DEFAULT 0
-            )
+            CREATE TABLE IF NOT EXISTS `polls` (
+  `room_id` VARCHAR(80) NOT NULL,
+  `event_id` VARCHAR(80) NOT NULL,
+  `topic` TEXT NOT NULL,
+  `reply_event_id` VARCHAR(80),
+  PRIMARY KEY (`room_id`, `event_id`))
             """
         )
-
-        # Create a unique index on room_id, user_id
+        # Create table for available answers to a poll
         self._execute(
             """
-            CREATE UNIQUE INDEX fail_id
-            ON fails(user_id, room_id)
-        """
+            CREATE TABLE IF NOT EXISTS `answers` (
+  `answer` VARCHAR(80) NOT NULL,
+  `answer_hash` VARCHAR(80) NOT NULL,
+  `room_id` VARCHAR(80) NOT NULL,
+  `reference_id` VARCHAR(80) NOT NULL,
+  PRIMARY KEY (`room_id`, `reference_id`, `answer_hash`),
+  CONSTRAINT `poll_id`
+    FOREIGN KEY (`room_id` , `reference_id`)
+    REFERENCES `polls` (`room_id` , `event_id`)
+    ON DELETE CASCADE
+    ON UPDATE NO ACTION)
+            """
+        )
+        # Create a table for users who have voted on a poll and their vote
+        self._execute(
+            """
+            CREATE TABLE IF NOT EXISTS `responses` (
+                `response` VARCHAR(80) NOT NULL,
+                `user` VARCHAR(80) NOT NULL,
+                `room_id` VARCHAR(80) NOT NULL,
+                `reference_id` VARCHAR(80) NOT NULL,
+                PRIMARY KEY (`room_id`, `reference_id`, `user`),
+                    CONSTRAINT `answer_id`
+                    FOREIGN KEY (`room_id` , `reference_id`)
+                REFERENCES `answers` (`room_id` , `reference_id`)
+                ON DELETE CASCADE
+                ON UPDATE NO ACTION)
+            """
         )
 
         # Set up any other necessary database tables here
@@ -144,57 +168,129 @@ class Storage:
         else:
             self.cursor.execute(*args)
 
-    def update_or_create_fail(self, user_id, room_id):
-        """Create a new fail entry, or increment an existing one"""
+    def create_poll(self, room_id, event_id, topic):
+        """Create a poll in the database."""
         logger.debug(
-            f"Creating new/incrementing attempts for {user_id} in room {room_id}"
+            f"Creating new poll `{topic}` in room {room_id}, event {event_id}"
         )
         self._execute(
             """
-            INSERT INTO fails (
-                user_id,
+            INSERT INTO polls (
                 room_id,
-                attempts
-            ) VALUES(
-                ?, ?, 1
-            )
-            ON CONFLICT (user_id, room_id) DO
-            UPDATE SET attempts = attempts + 1
+                event_id,
+                topic
+            ) VALUES (?, ?, ?)
         """,
-            (
-                user_id,
-                room_id,
-            ),
+            (room_id, event_id, topic),
         )
-
-    def delete_fail(self, user_id: str, room_id: str):
-        """Delete a fail entry via its user and room ids"""
+    
+    def get_poll(self, room_id, event_id):
+        """Get the poll from the database."""
+        logger.debug(
+            f"Getting poll in room {room_id}, event {event_id}"
+        )
         self._execute(
             """
-            DELETE FROM fails WHERE room_id = ? AND user_id = ?
+            SELECT * FROM polls WHERE room_id = ? AND event_id = ?
         """,
-            (room_id, user_id),
+            (room_id, event_id),
         )
-
-    def get_fail(self, user_id, room_id):
-        """Get the number of fails for a user in a group"""
-
+        return self.cursor.fetchone()
+    
+    def delete_poll(self, room_id, event_id):
+        """Delete the poll from the database."""
+        logger.debug(
+            f"Deleting poll in room {room_id}, event {event_id}"
+        )
         self._execute(
             """
-            SELECT attempts from fails
-            WHERE room_id = ? AND user_id = ?
+            DELETE FROM polls WHERE room_id = ? AND event_id = ?
         """,
-            (
-                room_id,
-                user_id,
-            ),
+            (room_id, event_id),
         )
 
-        row = self.cursor.fetchall()
-        if len(row) != 0:
-            logger.debug(
-                f"Found failed attempts for {user_id} in room {room_id}: {row[0][0]}"
-            )
-            return row[0][0]
-        logger.debug(f"First failed attempt for {user_id} in room {room_id}")
-        return 0
+    def update_reply_event_id_in_poll(self, room_id, event_id, reply_event_id):
+        """Update the reply event id in the database."""
+        logger.debug(
+            f"Updating reply event id in room {room_id}, event {event_id}"
+        )
+        self._execute(
+            """
+            UPDATE polls SET reply_event_id = ? WHERE room_id = ? AND event_id = ?
+        """,
+            (reply_event_id, room_id, event_id),
+        )
+    
+    def get_reply_event_id_in_poll(self, room_id, event_id):
+        """Get the reply event id from the database."""
+        logger.debug(
+            f"Getting reply event id in room {room_id}, event {event_id}"
+        )
+        self._execute(
+            """
+            SELECT reply_event_id FROM polls WHERE room_id = ? AND event_id = ?
+        """,
+            (room_id, event_id),
+        )
+        return self.cursor.fetchone()
+
+    def add_answer(self, answer, answer_hash, room_id, reference_id):
+        """Add an answer to the database."""
+        logger.debug(
+            f"Adding answer {answer} to room {room_id}, reference event {reference_id}"
+        )
+        self._execute(
+            """
+            INSERT INTO answers (
+                answer,
+                answer_hash,
+                room_id,
+                reference_id
+            ) VALUES (?, ?, ?, ?)
+        """,
+            (answer, answer_hash, room_id, reference_id),
+        )
+
+    def get_answers(self, room_id, reference_id):
+        """Get the answers from the database."""
+        logger.debug(
+            f"Getting answers in room {room_id}, reference event {reference_id}"
+        )
+        self._execute(
+            """
+            SELECT * FROM answers WHERE room_id = ? AND reference_id = ?
+        """,
+            (room_id, reference_id),
+        )
+        return self.cursor.fetchall()
+
+    def get_responses(self, room_id, reference_id):
+        """Get the response from the database."""
+        logger.debug(
+            f"Getting responses for poll in room {room_id}, reference event {reference_id}"
+        )
+        self._execute(
+            """
+            SELECT * FROM responses WHERE room_id = ? AND reference_id = ?
+        """,
+            (room_id, reference_id),
+        )
+        return self.cursor.fetchall()
+
+    def create_or_update_response(self, response, user, room_id, reference_id):
+        """Create or update a response in the database."""
+        logger.debug(
+            f"Creating or updating {user} response {response} in room {room_id}, reference event {reference_id}"
+        )
+        self._execute(
+            """
+            INSERT INTO responses (
+                response,
+                user,
+                room_id,
+                reference_id
+            ) VALUES (?, ?, ?, ?)
+            ON CONFLICT (user, room_id, reference_id) DO UPDATE SET response = ?
+        """,
+            (response, user, room_id, reference_id, response),
+        )
