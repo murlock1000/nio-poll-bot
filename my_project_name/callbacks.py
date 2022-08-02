@@ -176,8 +176,17 @@ class Callbacks:
         if event.type == "org.matrix.msc3381.poll.start":
           #  logger.debug(f"Event content: {event.source}")
             content = event.source.get("content", {}).get("org.matrix.msc3381.poll.start", {})
-            topic = content.get("question",{}).get("body")
+            if content.get("type") == {}:
+                logger.warning("Got poll without content")
+                return
+            topic = content.get("question",{}).get("org.matrix.msc1767.text", "")
+            if topic == "":
+                logger.warning("Got poll without topic")
+                return
             kind = content.get("kind","")
+            if kind == "":
+                logger.warning("Got poll without kind")
+                return
             self.store.create_poll(event.room_id, event.event_id, topic, kind)
 
             answers = content.get("answers", {})
@@ -185,6 +194,12 @@ class Callbacks:
             for answer in answers:
                 answer_hash = answer.get("id","")
                 answer = answer.get("org.matrix.msc1767.text","")
+                if answer_hash == "":
+                    logger.warning("Got poll without answer hash")
+                    continue
+                if answer == "":
+                    logger.warning("Got poll without answer")
+                    continue
                 self.store.add_answer(answer, answer_hash, event.room_id, event.event_id)
 
             message = self.get_formatted_poll_results(event.room_id, event.event_id, kind=kind)
@@ -203,10 +218,13 @@ class Callbacks:
             content = event.source.get("content", {})
             response = content.get("org.matrix.msc3381.poll.response", {}).get("answers", [])[0]
             reference_id = content.get("m.relates_to", {}).get("event_id","")
-            self.store.create_or_update_response(response, sender, event.room_id, reference_id)
+            if reference_id == "":
+                logger.warning("Got poll response without reference id")
+                return
             reply_event = self.store.get_reply_event(event.room_id, reference_id)
             # Get poll event id to reply to if it exists
             if reply_event:
+                self.store.create_or_update_response(response, sender, event.room_id, reference_id)
                 reply_event_id = reply_event[4]
                 kind = reply_event[3]
                 message = self.get_formatted_poll_results(event.room_id, reference_id, kind=kind)
