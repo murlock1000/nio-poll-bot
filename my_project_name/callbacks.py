@@ -175,8 +175,15 @@ class Callbacks:
 
         if event.type == "org.matrix.msc3381.poll.start":
           #  logger.debug(f"Event content: {event.source}")
-            content = event.source.get("content", {}).get("org.matrix.msc3381.poll.start", {})
-            if content.get("type") == {}:
+            wrapped_content = event.source.get("content", {})
+            if wrapped_content == {}:
+                logger.warning("Got poll without content")
+                return
+            content = wrapped_content.get("org.matrix.msc3381.poll.start", {})
+            # Alternate IOS wrapping
+            if content == {}:
+                content = wrapped_content.get("m.new_content",{}).get("org.matrix.msc3381.poll.end", {})
+            if content == {}:
                 logger.warning("Got poll without content")
                 return
             topic = content.get("question",{}).get("org.matrix.msc1767.text", "")
