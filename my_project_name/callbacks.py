@@ -1,5 +1,8 @@
 import logging
 from datetime import datetime
+from multiprocessing import Event
+from re import L
+import asyncio
 from nio import (
     AsyncClient,
     InviteMemberEvent,
@@ -10,6 +13,10 @@ from nio import (
     RoomMessageText,
     UnknownEvent,
     RoomMemberEvent,
+    EncryptedToDeviceEvent,
+    MessageDirection,
+    RoomMessagesResponse,
+    RoomGetEventResponse,
 )
 
 from my_project_name.bot_commands import Command
@@ -120,6 +127,17 @@ class Callbacks:
 
         # Successfully joined room
         logger.info(f"Joined {room.room_id}")
+        # Send out key request for encrypted events in room so we can accept the m.forwarded_room_key event
+        response = await self.client.sync()
+        for joined_room_id, room_info in response.rooms.join.items():
+            if joined_room_id == room.room_id:
+                for ev in room_info.timeline.events:
+                    if type(ev) is MegolmEvent:
+                        try:
+                            room_key_response = await self.client.request_room_key(ev)
+                            await self.client.receive_response(room_key_response)
+                        except Exception as e:
+                            logger.error(f"ERROR REQUESTIG ROOM KEY {e}")
 
     async def invite_event_filtered_callback(
         self, room: MatrixRoom, event: InviteMemberEvent
@@ -172,6 +190,12 @@ class Callbacks:
 
             event: The event itself.
         """
+        # If we are not filtering old messages, ignore messages older than 5 minutes
+        if not self.config.filter_old_messages:
+            if (
+                datetime.now() - datetime.fromtimestamp(event.server_timestamp / 1000.0)
+            ).total_seconds() > 300:
+                return
 
         if event.type == "org.matrix.msc3381.poll.start":
           #  logger.debug(f"Event content: {event.source}")
@@ -267,3 +291,107 @@ class Callbacks:
             )
             #logger.debug(f"Event content: {event.source}")
 
+    def event_related_to_poll(self, event: Event, event_id: str) -> bool:
+        """Check if an event is related to a poll with event_id.
+        """
+        if type(event) is not UnknownEvent:
+            return False
+        if event.type == "org.matrix.msc3381.poll.start":
+            return event.event_id == event_id
+        elif event.type in ["org.matrix.msc3381.poll.response", "org.matrix.msc3381.poll.end"]:
+            content = event.source.get("content", {})
+            reference_id = content.get("m.relates_to", {}).get("event_id","")
+            return reference_id == event_id
+        else:
+            return False
+
+    async def message(self, room: MatrixRoom, event: RoomMessageText) -> None:
+        """Callback for when a message event is received
+        Args:
+            room: The room the event came from.
+            event: The event defining the message.
+        """
+
+        # Ignore messages from ourselves
+        if event.sender == self.client.user:
+            return
+
+        # If we are not filtering old messages, ignore messages older than 5 minutes
+        if not self.config.filter_old_messages:
+            if (
+                datetime.now() - datetime.fromtimestamp(event.server_timestamp / 1000.0)
+            ).total_seconds() > 300:
+                return
+
+        #logger.debug(f"Event content: {event.source}")
+        room_id = event.source.get("room_id", "")
+        event_id = event.source.get("content", {}).get("m.relates_to", {}).get("m.in_reply_to", {}).get("event_id", "")
+        event_body = event.source.get("content", {}).get("formatted_body", "")
+
+        #logger.debug(f"Got message from {event.sender} in {room_id} with body {event_body}")
+
+        # Check if the message contains pill with bot id
+        my_pill = make_pill(self.client.user).split('>')[0]
+        if my_pill != event_body[:len(my_pill)]:
+            return
+
+        #Check if reply_to is a valid event_id
+        if event_id == "":
+            return
+
+        # Get the replied to event by event_id
+        resp = await self.client.room_get_event(room_id, event_id)
+        if type(resp) is not RoomGetEventResponse:
+            logger.error(f"{resp}")
+            return
+        poll_event = resp.event
+        # Check if we were unable to decrypt the message
+        if type(poll_event) is MegolmEvent:
+            logger.info("Got megolm event - trying to get keys")
+            try:
+                # Request keys for the event and update the client store
+                room_key_response = await self.client.request_room_key(poll_event)
+                await self.client.receive_response(room_key_response)
+            except Exception as e:
+                logger.info(f"Error requesting key: {e}")
+            try:
+                # Check if we are able to decrypt the event now
+                poll_event = self.client.olm.decrypt_megolm_event(poll_event, room_id)#self.client.decrypt_event(poll_event)
+            except Exception as e:
+                logger.info(f"Error decrypting: {e}")
+            return 
+
+        if type(poll_event) is not UnknownEvent:
+            logger.info(f"The referenced event is not of UnknownEvent type, instead: {poll_event.type}")
+            return
+        
+        # Check if inner event type is a poll.start
+        if poll_event.type != "org.matrix.msc3381.poll.start":
+            return
+
+        # Check if the poll already exists in store
+        reply_event = self.store.get_reply_event(event.room_id, poll_event.event_id)
+        if reply_event:
+            logger.info("Poll already replied to")
+            return
+
+        # Go over all events in the room (break if we find the replied to event) and store the events related to the poll
+        event_history = []
+        resp = RoomMessagesResponse
+        resp.end = self.client.loaded_sync_token
+        resp.start = ""
+        poll_start_found = False
+        while(resp.start != resp.end and not poll_start_found):
+            resp = await self.client.room_messages(room_id, resp.end)
+            for ev in resp.chunk:
+                if self.event_related_to_poll(ev, poll_event.event_id):
+                    event_history.append(ev)
+                    if ev.type == "org.matrix.msc3381.poll.start":
+                        poll_start_found = True
+                        break
+
+        event_history.reverse()
+        # React to all poll events
+        for ev in event_history:
+            await self.unknown(room, ev)
+        return 

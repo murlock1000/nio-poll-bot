@@ -198,7 +198,9 @@ class Storage:
             (room_id, event_id),
         )
         return self.cursor.fetchone()
-    
+    # MYSQL queries for deleting answers/responses that are no longer have an active poll. (sqlite fk ondelete cascade constraint doesn't work?)
+    # DELETE FROM answers WHERE (room_id,reference_id) IN (SELECT t1.room_id,t1.reference_id FROM answers AS t1 LEFT JOIN polls AS t2 ON t1.room_id = t2.room_id AND t1.reference_id = t2.event_id WHERE t2.event_id is null OR t2.room_id is null);
+    # DELETE FROM responses WHERE (room_id,reference_id) IN (SELECT t1.room_id,t1.reference_id FROM responses AS t1 LEFT JOIN polls AS t2 ON t1.room_id = t2.room_id AND t1.reference_id = t2.event_id WHERE t2.event_id is null OR t2.room_id is null);
     def delete_poll(self, room_id, event_id):
         """Delete the poll from the database."""
         logger.debug(
@@ -207,6 +209,18 @@ class Storage:
         self._execute(
             """
             DELETE FROM polls WHERE room_id = ? AND event_id = ?
+        """,
+            (room_id, event_id),
+        )
+        self._execute(
+            """
+            DELETE FROM answers WHERE room_id = ? AND reference_id = ?
+        """,
+            (room_id, event_id),
+        )
+        self._execute(
+            """
+            DELETE FROM responses WHERE room_id = ? AND reference_id = ?
         """,
             (room_id, event_id),
         )
