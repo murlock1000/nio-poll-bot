@@ -134,10 +134,14 @@ class Callbacks:
                 for ev in room_info.timeline.events:
                     if type(ev) is MegolmEvent:
                         try:
+                            # Request keys for the event and update the client store
+                            if ev in self.client.outgoing_key_requests:
+                                logger.debug("popping the session request")
+                                self.client.outgoing_key_requests.pop(ev.session_id)
                             room_key_response = await self.client.request_room_key(ev)
                             await self.client.receive_response(room_key_response)
                         except Exception as e:
-                            logger.error(f"ERROR REQUESTIG ROOM KEY {e}")
+                            logger.info(f"Error requesting key for event: {e}")
 
     async def invite_event_filtered_callback(
         self, room: MatrixRoom, event: InviteMemberEvent
@@ -180,7 +184,7 @@ class Callbacks:
             red_x_and_lock_emoji,
         )
 
-    async def unknown(self, room: MatrixRoom, event: UnknownEvent) -> None:
+    async def unknown(self, room: MatrixRoom, event: UnknownEvent, ignore_old = True) -> None:
         """Callback for when an event with a type that is unknown to matrix-nio is received.
         Currently this is used for reaction events, which are not yet part of a released
         matrix spec (and are thus unknown to nio).
@@ -191,7 +195,7 @@ class Callbacks:
             event: The event itself.
         """
         # If we are not filtering old messages, ignore messages older than 5 minutes
-        if not self.config.filter_old_messages:
+        if not self.config.filter_old_messages and ignore_old:
             if (
                 datetime.now() - datetime.fromtimestamp(event.server_timestamp / 1000.0)
             ).total_seconds() > 300:
@@ -350,10 +354,13 @@ class Callbacks:
             logger.info("Got megolm event - trying to get keys")
             try:
                 # Request keys for the event and update the client store
+                if poll_event.session_id in self.client.outgoing_key_requests:
+                    logger.debug("popping the session request")
+                    self.client.outgoing_key_requests.pop(poll_event.session_id)
                 room_key_response = await self.client.request_room_key(poll_event)
                 await self.client.receive_response(room_key_response)
             except Exception as e:
-                logger.info(f"Error requesting key: {e}")
+                logger.info(f"Error requesting key for event: {e}")
             try:
                 # Check if we are able to decrypt the event now
                 poll_event = self.client.olm.decrypt_megolm_event(poll_event, room_id)#self.client.decrypt_event(poll_event)
@@ -393,5 +400,5 @@ class Callbacks:
         event_history.reverse()
         # React to all poll events
         for ev in event_history:
-            await self.unknown(room, ev)
+            await self.unknown(room, ev, ignore_old = False)
         return 
