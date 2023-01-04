@@ -309,6 +309,12 @@ class Callbacks:
         else:
             return False
 
+    async def send_warning_message(self, room_id, message, reply_event=None):
+        if reply_event:
+            await send_text_to_room(self.client, room_id, message, reply_to_event_id=reply_event)
+        else:
+            await send_text_to_room(self.client, room_id, message)
+
     async def message(self, room: MatrixRoom, event: RoomMessageText) -> None:
         """Callback for when a message event is received
         Args:
@@ -361,25 +367,31 @@ class Callbacks:
                 await self.client.receive_response(room_key_response)
             except Exception as e:
                 logger.info(f"Error requesting key for event: {e}")
+                await self.send_warning_message(room.room_id, "Unable to get keys for this poll. Please create a new one", event_id)
+                return
             try:
                 # Check if we are able to decrypt the event now
                 poll_event = self.client.olm.decrypt_megolm_event(poll_event, room_id)#self.client.decrypt_event(poll_event)
             except Exception as e:
                 logger.info(f"Error decrypting: {e}")
-            return 
+                await self.send_warning_message(room.room_id, "Unable to decrypt this poll. Please create a new one")
+                return
 
         if type(poll_event) is not UnknownEvent:
             logger.info(f"The referenced event is not of UnknownEvent type, instead: {poll_event.type}")
+            await self.send_warning_message(room.room_id, f"This is not a poll, but a {poll_event.type}", event_id)
             return
         
         # Check if inner event type is a poll.start
         if poll_event.type != "org.matrix.msc3381.poll.start":
+            await self.send_warning_message(room.room_id, f"This is not a poll, but a {poll_event.type}", event_id)
             return
 
         # Check if the poll already exists in store
         reply_event = self.store.get_reply_event(event.room_id, poll_event.event_id)
         if reply_event:
             logger.info("Poll already replied to")
+            await self.send_warning_message(room.room_id, f"This statistics for this poll has already been created.", reply_event[4])
             return
 
         # Go over all events in the room (break if we find the replied to event) and store the events related to the poll
