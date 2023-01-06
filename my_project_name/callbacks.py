@@ -201,7 +201,7 @@ class Callbacks:
             ).total_seconds() > 300:
                 return
 
-        if event.type == "org.matrix.msc3381.poll.start":
+        if event.type == "org.matrix.msc3381.poll.start" or event.type == "m.poll.start":
           #  logger.debug(f"Event content: {event.source}")
             wrapped_content = event.source.get("content", {})
             if wrapped_content == {}:
@@ -247,8 +247,7 @@ class Callbacks:
             )
 
             self.store.update_reply_event_id_in_poll(event.room_id, event.event_id, res.event_id)
-
-        elif event.type == "org.matrix.msc3381.poll.response":
+        elif event.type == "org.matrix.msc3381.poll.response" or event.type == "m.poll.response":
             sender = event.source.get("sender", "")
             content = event.source.get("content", {})
             response = content.get("org.matrix.msc3381.poll.response", {}).get("answers", [])[0]
@@ -270,7 +269,7 @@ class Callbacks:
                     edit_event_id=reply_event_id,
                 )
 
-        elif event.type == "org.matrix.msc3381.poll.end":
+        elif event.type == "org.matrix.msc3381.poll.end" or event.type == "m.poll.end":
             content = event.source.get("content", {})
             reference_id = content.get("m.relates_to", {}).get("event_id","")
             
@@ -300,9 +299,9 @@ class Callbacks:
         """
         if type(event) is not UnknownEvent:
             return False
-        if event.type == "org.matrix.msc3381.poll.start":
+        if event.type == "org.matrix.msc3381.poll.start" or event.type == "m.poll.start":
             return event.event_id == event_id
-        elif event.type in ["org.matrix.msc3381.poll.response", "org.matrix.msc3381.poll.end"]:
+        elif event.type in ["org.matrix.msc3381.poll.response", "org.matrix.msc3381.poll.end", "m.poll.response", "m.poll.end"]:
             content = event.source.get("content", {})
             reference_id = content.get("m.relates_to", {}).get("event_id","")
             return reference_id == event_id
@@ -379,11 +378,11 @@ class Callbacks:
 
         if type(poll_event) is not UnknownEvent:
             logger.info(f"The referenced event is not of UnknownEvent type, instead: {poll_event.type}")
-            await self.send_warning_message(room.room_id, f"This is not a poll, but a {poll_event.type}", event_id)
+            await self.send_warning_message(room.room_id, f"This is not a poll, but a {poll_event.type}, not unknown", event_id)
             return
         
         # Check if inner event type is a poll.start
-        if poll_event.type != "org.matrix.msc3381.poll.start":
+        if poll_event.type != "org.matrix.msc3381.poll.start" and poll_event.type != "m.poll.start":
             await self.send_warning_message(room.room_id, f"This is not a poll, but a {poll_event.type}", event_id)
             return
 
@@ -405,7 +404,7 @@ class Callbacks:
             for ev in resp.chunk:
                 if self.event_related_to_poll(ev, poll_event.event_id):
                     event_history.append(ev)
-                    if ev.type == "org.matrix.msc3381.poll.start":
+                    if ev.type == "org.matrix.msc3381.poll.start" or ev.type == "m.poll.start":
                         poll_start_found = True
                         break
 
