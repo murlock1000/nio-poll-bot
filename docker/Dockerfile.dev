@@ -21,6 +21,8 @@
 #    docker build -f docker/Dockerfile --build-arg LIBOLM_VERSION=3.2.10 .
 #
 
+#TODO: Add support for dev docker build
+
 ARG PYTHON_VERSION=3.10
 FROM docker.io/python:${PYTHON_VERSION}-alpine
 
@@ -68,4 +70,4 @@ COPY *.py /src/
 VOLUME ["/data"]
 
 # Start the app
-ENTRYPOINT ["main.py", "/data/config.yaml"]
+ENTRYPOINT ["/apps/main.py", "/data/config.yaml"]

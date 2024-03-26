@@ -1,5 +1,5 @@
-import logging
 import asyncio
+import logging
 from typing import Optional, Union
 
 from aiohttp import ClientResponse

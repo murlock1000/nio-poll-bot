@@ -8,7 +8,7 @@ from typing import Any, Dict
 # the version specified here.
 #
 # When a migration is performed, the `migration_version` table should be incremented.
-latest_migration_version = 0
+latest_migration_version = 1
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +74,7 @@ class Storage:
             """
             CREATE TABLE migration_version (
                 version INTEGER PRIMARY KEY
-            )
+            );
         """
         )
 
@@ -83,53 +83,9 @@ class Storage:
             """
             INSERT INTO migration_version (
                 version
-            ) VALUES (?)
+            ) VALUES (?);
         """,
             (0,),
-        )
-        # Create table for polls
-        self._execute(
-            """
-            CREATE TABLE IF NOT EXISTS `polls` (
-  `room_id` VARCHAR(80) NOT NULL,
-  `event_id` VARCHAR(80) NOT NULL,
-  `topic` TEXT NOT NULL,
-  `kind` VARCHAR(80) NOT NULL,
-  `reply_event_id` VARCHAR(80),
-  PRIMARY KEY (`room_id`, `event_id`))
-            """
-        )
-        # Create table for available answers to a poll
-        self._execute(
-            """
-            CREATE TABLE IF NOT EXISTS `answers` (
-  `answer` VARCHAR(80) NOT NULL,
-  `answer_hash` VARCHAR(80) NOT NULL,
-  `room_id` VARCHAR(80) NOT NULL,
-  `reference_id` VARCHAR(80) NOT NULL,
-  PRIMARY KEY (`room_id`, `reference_id`, `answer_hash`),
-  CONSTRAINT `poll_id`
-    FOREIGN KEY (`room_id` , `reference_id`)
-    REFERENCES `polls` (`room_id` , `event_id`)
-    ON DELETE CASCADE
-    ON UPDATE NO ACTION)
-            """
-        )
-        # Create a table for users who have voted on a poll and their vote
-        self._execute(
-            """
-            CREATE TABLE IF NOT EXISTS `responses` (
-                `response` VARCHAR(80) NOT NULL,
-                `user` VARCHAR(80) NOT NULL,
-                `room_id` VARCHAR(80) NOT NULL,
-                `reference_id` VARCHAR(80) NOT NULL,
-                PRIMARY KEY (`room_id`, `reference_id`, `user`),
-                    CONSTRAINT `answer_id`
-                    FOREIGN KEY (`room_id` , `reference_id`)
-                REFERENCES `answers` (`room_id` , `reference_id`)
-                ON DELETE CASCADE
-                ON UPDATE NO ACTION)
-            """
         )
 
         # Set up any other necessary database tables here
@@ -146,15 +102,58 @@ class Storage:
         """
         logger.debug("Checking for necessary database migrations...")
 
-        # if current_migration_version < 1:
-        #    logger.info("Migrating the database from v0 to v1...")
-        #
-        #    # Add new table, delete old ones, etc.
-        #
-        #    # Update the stored migration version
-        #    self._execute("UPDATE migration_version SET version = 1")
-        #
-        #    logger.info("Database migrated to v1")
+        if current_migration_version < 1:
+            logger.info("Migrating the database from v0 to v1...")
+              # Create table for polls
+            self._execute(
+            """
+            CREATE TABLE IF NOT EXISTS polls (
+  room_id VARCHAR(80) NOT NULL,
+  event_id VARCHAR(80) NOT NULL,
+  topic TEXT NOT NULL,
+  kind VARCHAR(80) NOT NULL,
+  reply_event_id VARCHAR(80),
+  PRIMARY KEY (room_id, event_id));
+            """
+        )
+        # Create table for available answers to a poll
+            self._execute(
+            """
+            CREATE TABLE IF NOT EXISTS answers (
+  answer VARCHAR(80) NOT NULL,
+  answer_hash VARCHAR(80) NOT NULL,
+  room_id VARCHAR(80) NOT NULL,
+  reference_id VARCHAR(80) NOT NULL,
+  PRIMARY KEY (room_id, reference_id, answer_hash),
+  CONSTRAINT poll_id
+    FOREIGN KEY (room_id , reference_id)
+    REFERENCES polls (room_id , event_id)
+    ON DELETE CASCADE
+    ON UPDATE NO ACTION);
+            """
+        )
+        # Create a table for users who have voted on a poll and their vote
+            self._execute(
+            """
+            CREATE TABLE IF NOT EXISTS responses (
+  response VARCHAR(80) NOT NULL,
+  "user" VARCHAR(80) NOT NULL,
+  room_id VARCHAR(80) NOT NULL,
+  reference_id VARCHAR(80) NOT NULL,
+  PRIMARY KEY (room_id, reference_id, "user"),
+  CONSTRAINT answer_id
+    FOREIGN KEY (room_id, reference_id, response)
+    REFERENCES answers (room_id, reference_id, answer_hash)
+    ON DELETE CASCADE
+    ON UPDATE NO ACTION);
+            """
+        )
+        
+            # Update the stored migration version
+            current_migration_version += 1
+            self._execute("UPDATE migration_version SET version = ?", (current_migration_version,))
+
+            logger.info(f"Database migrated to v{current_migration_version}")
 
     def _execute(self, *args) -> None:
         """A wrapper around cursor.execute that transforms placeholder ?'s to %s for postgres.

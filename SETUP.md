@@ -1,8 +1,6 @@
 # Setup
 
-nio-template is a sample repository of a working Matrix bot that can be taken
-and transformed into one's own bot, service or whatever else may be necessary.
-Below is a quick setup guide to running the existing bot.
+Below is a quick setup guide to running the nio-poll-bot.
 
 ## Install the dependencies
 
@@ -43,7 +41,17 @@ instruct you on how to install the dependencies natively:
 
 You can install [libolm](https://gitlab.matrix.org/matrix-org/olm) from source,
 or alternatively, check your system's package manager. Version `3.0.0` or
-greater is required.
+greater is required and can be installed using:
+
+```
+sudo apt install libolm-dev
+```
+
+#### Python dev dependencies
+
+```
+sudo apt install python3-dev build-essential
+```
 
 **(Optional) postgres development headers**
 
@@ -55,38 +63,30 @@ If you want to use postgres as a database backend, you'll need to install
 postgres development headers:
 
 Debian/Ubuntu:
-
 ```
 sudo apt install libpq-dev libpq5
 ```
 
 Arch:
-
 ```
 sudo pacman -S postgresql-libs
 ```
 
 #### Install Python dependencies
 
-Create and activate a Python 3 virtual environment:
+We will be using [Poetry](https://python-poetry.org/) to manage our project dependencies.
 
-```
-virtualenv -p python3 env
-source env/bin/activate
-```
-
-Install python dependencies:
-
-```
-pip install -e .
-```
-
-(Optional) If you want to use postgres as a database backend, use the following
-command to install postgres dependencies alongside those that are necessary:
-
-```
-pip install -e ".[postgres]"
-```
+- Create a Python 3 virtual environment:
+    ```
+    pip install virtualenv
+    virtualenv -p python3 env
+    source ./env/bin/activate
+    ```
+- Install poetry and dependencies:
+   ```
+   pip install poetry
+   poetry install
+   ```
 
 ## Configuration
 
@@ -100,11 +100,11 @@ Edit the config file. The `matrix` section must be modified at least.
 
 #### (Optional) Set up a Postgres database
 
-Create a postgres user and database for matrix-reminder-bot:
+Create a postgres user and database for nio-poll-bot:
 
 ```
-sudo -u postgresql psql createuser nio-template -W  # prompts for a password
-sudo -u postgresql psql createdb -O nio-template nio-template
+sudo -u postgresql psql createuser nio-poll-bot -W  # prompts for a password
+sudo -u postgresql psql createdb -O nio-poll-bot nio-poll-bot
 ```
 
 Edit the `storage.database` config option, replacing the `sqlite://...` string with `postgres://...`. The syntax is:
@@ -132,34 +132,43 @@ source env/bin/activate
 Then simply run the bot with:
 
 ```
-main.py
+poetry run python3 main.py
 ```
-
-You'll notice that "nio_poll_bot" is scattered throughout the codebase. When
-it comes time to modifying the code for your own purposes, you are expected to
-replace every instance of "nio_poll_bot" and its variances with your own
-project's name.
 
 By default, the bot will run with the config file at `./config.yaml`. However, an
 alternative relative or absolute filepath can be specified after the command:
 
 ```
-main.py other-config.yaml
+poetry run python3 main.py other-config.yaml
 ```
 
 ## Testing the bot works
 
 Invite the bot to a room and it should accept the invite and join.
 
-By default nio-template comes with an `echo` command. Let's test this now.
-After the bot has successfully joined the room, try sending the following
-in a message:
+Create a new poll by selecting `More options` in the bottom right corner of Matrix Element (Other Interfaces available) and `Poll`. The nio-poll-bot should send a new message related to the poll, displaying the current votes with user tags.
+
+## Changing bot user Message throttling settings
+In order to allow the bot to respond to messages quickly without the synapse server throttling the messages,
+we must overwrite the user message throttling settings.
+We will be using the synapse Admin API to make a POST request to the server - 
+[Documentation of synapse admin api](https://matrix-org.github.io/synapse/latest/usage/administration/admin_api/).
+
+### Fetching the admin api key 
+* Create a matrix user with admin privileges
+* Log in with the user
+* Go to 'All settings' -> 'Help & About' -> 'Advanced' -> 'Access Token' (at the bottom)
+* Copy the Access Token.
+This token is only valid for the duration you are logged in with the user!
+ 
+### Make the API call 
+The call for overwriting the @test:synapse.local user throttle settings is:
 
 ```
-!c echo I am a bot!
+curl --header "Authorization: Bearer ENTERADMINAPIKEYHERE" -H "Content-Type: application/json" --request POST -k http://localhost:8008/_synapse/admin/v1/users/@test:synapse.local/override_ratelimit
 ```
 
-The message should be repeated back to you by the bot.
+It should return result of `{"messages_per_second":0, "burst_count":0}`
 
 ## Going forwards
 
@@ -169,5 +178,4 @@ re-run the bot and see how it behaves. Have fun!
 ## Troubleshooting
 
 If you had any difficulties with this setup process, please [file an
-issue](https://github.com/anoadragon453/nio-template/issues]) or come talk
-about it in [the matrix room](https://matrix.to/#/#nio-template).
+issue](https://github.com/murlock1000/nio-poll-bot/issues).

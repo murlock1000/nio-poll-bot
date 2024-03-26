@@ -12,9 +12,9 @@ from nio import (
     LocalProtocolError,
     LoginError,
     MegolmEvent,
+    RoomMemberEvent,
     RoomMessageText,
     UnknownEvent,
-    RoomMemberEvent,
 )
 
 from nio_poll_bot.callbacks import Callbacks
