@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/bin/bash
 
 # Check that regex-rename is installed
 if ! command -v regex-rename &> /dev/null

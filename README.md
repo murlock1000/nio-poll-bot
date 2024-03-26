@@ -81,7 +81,7 @@ level: DEBUG
 ```
 
 Run the bot:
-`my-project-name`
+`main.py`
 
 Invite the bot to a group channel
 Give the bot moderator power level (50)

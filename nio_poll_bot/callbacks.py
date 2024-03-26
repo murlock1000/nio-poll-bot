@@ -19,10 +19,10 @@ from nio import (
     RoomGetEventResponse,
 )
 
-from my_project_name.bot_commands import Command
-from my_project_name.chat_functions import make_pill, react_to_event, send_text_to_room
-from my_project_name.config import Config
-from my_project_name.storage import Storage
+from nio_poll_bot.bot_commands import Command
+from nio_poll_bot.chat_functions import make_pill, react_to_event, send_text_to_room
+from nio_poll_bot.config import Config
+from nio_poll_bot.storage import Storage
 
 logger = logging.getLogger(__name__)
 

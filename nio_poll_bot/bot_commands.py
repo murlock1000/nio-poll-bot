@@ -2,14 +2,14 @@ import logging
 
 from nio import AsyncClient, MatrixRoom, RoomMessageText, RoomRedactResponse
 
-from my_project_name.chat_functions import (
+from nio_poll_bot.chat_functions import (
     react_to_event,
     send_msg,
     send_text_to_room,
     set_user_power,
 )
-from my_project_name.config import Config
-from my_project_name.storage import Storage
+from nio_poll_bot.config import Config
+from nio_poll_bot.storage import Storage
 
 logger = logging.getLogger(__name__)
 

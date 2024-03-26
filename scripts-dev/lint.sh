@@ -11,7 +11,7 @@ if [ $# -ge 1 ]
 then
     files=$*
   else
-    files="my_project_name my-project-name tests"
+    files="nio_poll_bot main.py tests"
 fi
 
 echo "Linting these locations: $files"

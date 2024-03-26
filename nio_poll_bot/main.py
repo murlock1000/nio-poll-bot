@@ -17,9 +17,9 @@ from nio import (
     RoomMemberEvent,
 )
 
-from my_project_name.callbacks import Callbacks
-from my_project_name.config import Config
-from my_project_name.storage import Storage
+from nio_poll_bot.callbacks import Callbacks
+from nio_poll_bot.config import Config
+from nio_poll_bot.storage import Storage
 
 logger = logging.getLogger(__name__)
 
