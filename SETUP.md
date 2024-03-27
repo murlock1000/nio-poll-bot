@@ -21,7 +21,7 @@ installation and ensuring the `docker-compose` command works, you need to:
    docker volume create \
      --opt type=none \
      --opt o=bind \
-     --opt device="/path/to/data/dir" data_volume
+     --opt device="/path/to/data/dir" nio_poll_bot_data_volume
    ```
 
 Run `docker/start-dev.sh` to start the bot.

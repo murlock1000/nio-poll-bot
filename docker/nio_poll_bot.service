@@ -1,5 +1,5 @@
 [Unit]
-Description=A matrix bot that does amazing things!
+This bot is designed to display live user votes on a matrix poll and summarize results.
 
 [Service]
 Type=simple

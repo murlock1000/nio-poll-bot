@@ -1,6 +1,6 @@
 # Docker
 
-The docker image from [Docker Hub](https://hub.docker.com/r/murlock1000/support_bot) will run nio_poll_bot with a SQLite database and
+The docker image from [Docker Hub](https://hub.docker.com/r/murlock1000/nio_poll_bot) will run nio_poll_bot with a SQLite database and
 end-to-end encryption dependencies included. For larger deployments, a
 connection to a Postgres database backend is recommended.
 
@@ -93,7 +93,7 @@ docker-compose up -d nio_poll_bot
 (Logs can later be accessed with the `docker logs` command).
 
 This will use the `latest` tag from
-[Docker Hub](https://hub.docker.com/r/murlock1000/support_bot).
+[Docker Hub](https://hub.docker.com/r/murlock1000/nio_poll_bot).
 
 If you would rather run from the checked out code, you can use:
 
