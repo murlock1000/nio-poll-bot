@@ -2,6 +2,11 @@
 
 ## v1.0.1 - 2024-03-26
 
+* Implement dev container
+* Fix missing dependencies in docker
+
+## v1.0.1 - 2024-03-26
+
 * Fix support for postgresql
 * Dockerize project
 * Change project structure

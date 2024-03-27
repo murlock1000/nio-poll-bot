@@ -21,9 +21,8 @@
 #    docker build -f docker/Dockerfile --build-arg LIBOLM_VERSION=3.2.10 .
 #
 
-#TODO: Add support for dev docker build
 
-ARG PYTHON_VERSION=3.10
+ARG PYTHON_VERSION=3.8
 FROM docker.io/python:${PYTHON_VERSION}-alpine
 
 ##
@@ -31,7 +30,7 @@ FROM docker.io/python:${PYTHON_VERSION}-alpine
 ##
 
 # Install libolm build dependencies
-ARG LIBOLM_VERSION=3.2.10
+ARG LIBOLM_VERSION=3.2.16
 RUN apk add --no-cache \
     make \
     cmake \
@@ -55,19 +54,35 @@ RUN apk add --no-cache \
 
 # Install python runtime modules. We do this before copying the source code
 # such that these dependencies can be cached
-RUN mkdir -p /src/nio_poll_bot
-COPY nio_poll_bot/__init__.py /src/nio_poll_bot/
-COPY README.md main.py /src/
-COPY setup.py /src/setup.py
-RUN pip install -e "/src/.[postgres]"
+RUN mkdir -p /app/nio_poll_bot
+COPY nio_poll_bot/__init__.py /app/nio_poll_bot/
+COPY README.md main.py /app/
 
-# Now copy the source code
-COPY nio_poll_bot/*.py /src/nio_poll_bot/
-COPY *.py /src/
+# Build the dependencies
+RUN pip install --upgrade pip
+# Pin poetry version so updates don't break the build
+RUN pip install poetry==1.8.2
 
+# Disable poetry venv creation in builder.
+ENV POETRY_NO_INTERACTION=1 \
+    POETRY_VIRTUALENVS_CREATE=0
+
+WORKDIR /app
+COPY pyproject.toml poetry.lock /app/
+
+# Export poetry.lock to requirements file omitting hashes for faster dependency resolution
+# And building libraries in external folder /python-libs
+RUN poetry export --without-hashes --format=requirements.txt > requirements.txt
+# Install production dependencies
+RUN pip install -r requirements.txt
 # Specify a volume that holds the config file, SQLite3 database,
 # and the matrix-nio store
+
+# Now copy the source code
+COPY nio_poll_bot/*.py /app/nio_poll_bot/
+COPY *.py *.md /app/
+
 VOLUME ["/data"]
 
 # Start the app
-ENTRYPOINT ["/apps/main.py", "/data/config.yaml"]
+ENTRYPOINT ["python", "/app/main.py", "/data/config.yaml"]

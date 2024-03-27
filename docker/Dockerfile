@@ -72,10 +72,10 @@ WORKDIR /app
 COPY pyproject.toml poetry.lock /app/
 
 # Export poetry.lock to requirements file omitting hashes for faster dependency resolution
+# And building libraries in external folder /python-libs
 RUN poetry export --without-hashes --without dev --format=requirements.txt > requirements.txt
 # Install production dependencies
-#RUN poetry install --without dev
-RUN pip install --prefix="/python-libs" --no-warn-script-location -r requirements.txt
+RUN pip install --prefix="/python-libs" --ignore-installed --no-warn-script-location -r requirements.txt
 
 # Now copy the source code
 COPY *.py *.md /app/
@@ -96,18 +96,15 @@ COPY --from=builder /python-libs /usr/local
 COPY --from=builder /usr/local/lib/libolm* /usr/local/lib/
 
 # Install any native runtime dependencies
-#RUN apk add --no-cache \
-#    libstdc++ 
+RUN apk add --no-cache \
+    libstdc++ 
 
 RUN apk add --no-cache \
     libpq
 
-#RUN apk add --no-cache \
-#    postgresql-dev
-
 # Copy app files
 COPY *.py *.md /app/
-COPY nio_poll_bot/ /app/nio_poll_bot/
+COPY nio_poll_bot/*.py /app/nio_poll_bot/
 
 # Specify a volume that holds the config file, SQLite3 database,
 # and the matrix-nio store
