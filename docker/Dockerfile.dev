@@ -72,7 +72,7 @@ COPY pyproject.toml poetry.lock /app/
 
 # Export poetry.lock to requirements file omitting hashes for faster dependency resolution
 # And building libraries in external folder /python-libs
-RUN poetry export --without-hashes --format=requirements.txt > requirements.txt
+RUN poetry export --without-hashes --with dev --format=requirements.txt > requirements.txt
 # Install production dependencies
 RUN pip install -r requirements.txt
 # Specify a volume that holds the config file, SQLite3 database,
