@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "nio-poll-bot"
-version = "1.0.1"
+version = "1.0.2"
 description = "Matrix bot designed to display user votes on a poll live and summarize results"
 authors = ["murlock1000 <pauliusjankauskas10@gmail.com>"]
 license = "Apache-2.0"
